@@ -1,30 +1,32 @@
 {
-    "name": "T5",
+    "name": "Mnist_LeNet",
     "n_gpu": 1,
+
     "arch": {
-        "type": "T5",
+        "type": "MnistModel",
         "args": {}
     },
-    "train_dir": "/home/weijie_yu/dataset/legal/lm/law_content.json",
-    "valid_dir": "/home/weijie_yu/dataset/legal/lm/law_content.json",
-    "test_dir": "/home/weijie_yu/dataset/legal/lm/law_content.json",
-    "model_path":"/home/weijie_yu/pretrain_models/RandengT5",
-    "batch_size": 2,
-    "max_len": 256,
-    "max_len_out":32,
-    "shuffle": true,
-    "num_workers": 1,
+    "data_loader": {
+        "type": "MnistDataLoader",
+        "args":{
+            "data_dir": "data/",
+            "batch_size": 128,
+            "shuffle": true,
+            "validation_split": 0.1,
+            "num_workers": 2
+        }
+    },
     "optimizer": {
         "type": "Adam",
         "args":{
-            "lr": 1e-4,
+            "lr": 0.001,
             "weight_decay": 0,
             "amsgrad": true
         }
     },
-    "loss": "cross_entropy",
+    "loss": "nll_loss",
     "metrics": [
-        "rouge_1","rouge_2","rouge_l"
+        "accuracy", "top_k_acc"
     ],
     "lr_scheduler": {
         "type": "StepLR",

@@ -1,32 +1,55 @@
 import argparse
 import collections
 import torch
+import os 
 import numpy as np
-import data_loader.data_loaders as module_data
+# import data_loader.data_loaders as module_data
+from data_loader.data_loaders import build_dataloader
 import model.loss as module_loss
 import model.metric as module_metric
-import model.model as module_arch
+# import model.model as module_arch
+from model.model import T5_model
 from parse_config import ConfigParser
 from trainer import Trainer
 from utils import prepare_device
+from transformers import T5Tokenizer, T5Config, T5ForConditionalGeneration
+from torch.nn.parallel import DistributedDataParallel
 
 
 # fix random seeds for reproducibility
-SEED = 123
+SEED = 42
 torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(SEED)
 
 def main(config):
+    # torch.cuda.set_device(args.local_rank)
+    # torch.distributed.init_process_group(backend="nccl")
+
     logger = config.get_logger('train')
 
     # setup data_loader instances
-    data_loader = config.init_obj('data_loader', module_data)
-    valid_data_loader = data_loader.split_validation()
+    # data_loader = config.init_obj('data_loader', module_data)
+    # valid_data_loader = data_loader.split_validation()
+    special_tokens = ["<extra_id_{}>".format(i) for i in range(100)]
+    model_tokenizer  = T5Tokenizer.from_pretrained(
+                            config["model_path"],
+                            do_lower_case=True,
+                            max_length= config["max_len"],
+                            truncation=True,
+                            additional_special_tokens=special_tokens,
+                        )
+    model_config = T5Config.from_pretrained(config["model_path"])
+    mode_model = T5ForConditionalGeneration.from_pretrained(config["model_path"], config=model_config)
+    mode_model.resize_token_embeddings(len(model_tokenizer))
+    model = T5_model(mode_model, model_tokenizer, config["max_len_out"])
+    # model = DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
+    data_loader = build_dataloader(config['train_dir'], model_tokenizer, config["batch_size"], config["shuffle"], config["num_workers"], config["max_len"])
+    valid_data_loader = build_dataloader(config['test_dir'], model_tokenizer, config["batch_size"], config["shuffle"], config["num_workers"], config["max_len"])
     # build model architecture, then print to console
-    model = config.init_obj('arch', module_arch)
+    # model = config.init_obj('arch', module_arch, model, tokenizer, config["max_len"])
     logger.info(model)
 
     # prepare for (multi-device) GPU training
@@ -62,7 +85,8 @@ if __name__ == '__main__':
                       help='path to latest checkpoint (default: None)')
     args.add_argument('-d', '--device', default=None, type=str,
                       help='indices of GPUs to enable (default: all)')
-
+    # args.add_argument('--local_rank', default=None, type=int,
+    #                   help='indices of GPUs to enable (default: all)')
     # custom cli options to modify configuration from default values given in json file.
     CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
     options = [
